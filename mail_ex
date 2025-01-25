@@ -1,0 +1,98 @@
+public ModelAndView changeStatus(ModelAndView mv, HttpServletRequest req) throws Exception {
+		HashMap<String, Object> params = ParamGetter.pGetter(req);
+		int result = 0;
+		
+		//상태값 변경전에 가져고온 상태변경 유저 리스트
+		HashMap<String,Object> list = adminDao.selectAdminInfo(params);
+		
+		//가지고온 상태값으로 변경
+		result = adminDao.statusUpdate(params);
+
+		//기존 유저 상태
+		String use_status = list.get("USE_STATUS").toString();
+		log.debug("기존 useStatus ::"+use_status);
+		log.debug("변경 useStatus ::"+params.get("USE_STATUS").toString());
+		
+		//기존유저상태가 n -> y 로바뀔때만 액션수행
+		if(use_status.equals("n")) {
+			
+				//유저의 상태가 n에서 y로 바뀌고 판매자회원들만  메일보낸다. + 알림톡
+				if(params.get("USE_STATUS").toString().equals("y") && params.get("GRADE_UUID").toString().equals("2")) { 
+					
+					
+					//메일보낼 html 내용
+					String htmlContent = ""	;
+					htmlContent +="<h3>환영합니다,"+list.get("ADMIN_NAME").toString() +" 회원님!</h3>";
+					htmlContent +="<p>유통플랫폼 '직통(ZICTONG)'에 가입해 주셔서 대단히 감사합니다.</p>";
+					htmlContent +="<p>이제 회원님의 아이디와 비밀번호를 이용하여 언제든지 접속할 수 있습니다.</p>";
+					htmlContent +="<p>궁금하신 내용은 아래의 경로를 통하여 연락해 주시면 성실히 답변드리겠습니다.</p><br>";
+					htmlContent +="<p>- 특정 상품정보 관련 : 해당 상품 상세페이지 내 문의하기 클릭 > 카톡 1:1채팅</p>";
+					htmlContent +="<p>- 플랫폼 이용관련 : 고객센터 > 문의사항 클릭 > 카톡 1:1채팅</p><br>";
+					htmlContent +="<p>보다 나은 이용환경을 위해 최선을 다하겠습니다.</p>";
+					htmlContent +="<p>감사합니다.</p>";
+					
+					
+					
+					//판매자가 사용처리 됬을떄 이메일 송신
+					// MIME 타입 설정
+					MailcapCommandMap MailcapCmdMap = (MailcapCommandMap) CommandMap.getDefaultCommandMap();
+					MailcapCmdMap.addMailcap("text/html;; x-java-content-handler=com.sun.mail.handlers.text_html");
+					MailcapCmdMap.addMailcap("text/xml;; x-java-content-handler=com.sun.mail.handlers.text_xml");
+					MailcapCmdMap.addMailcap("text/plain;; x-java-content-handler=com.sun.mail.handlers.text_plain");
+					MailcapCmdMap.addMailcap("multipart/*;; x-java-content-handler=com.sun.mail.handlers.multipart_mixed");
+					MailcapCmdMap.addMailcap("message/rfc822;; x-java-content-handler=com.sun.mail.handlers.message_rfc822");
+					CommandMap.setDefaultCommandMap(MailcapCmdMap);
+					
+					MimeMessage msg = mailSender.createMimeMessage();
+					InternetAddress addr=new InternetAddress("#########","########");
+					msg.setFrom(addr);//수신자
+					msg.setSubject("직통(ZICTONG) 회원가입 완료 안내","UTF-8"); //제목
+					msg.setText(htmlContent,"UTF-8","html"); //내용
+					msg.setRecipient(RecipientType.TO, new InternetAddress(list.get("admin_email").toString())); //수령인
+					
+					
+					log.debug("메세지 :: "+msg);
+					mailSender.send(msg);
+					
+					
+					String alarmMsg="";
+					
+					alarmMsg="환영합니다,\r\n"
+							+ list.get("ADMIN_NAME").toString()+"님!\r\n"
+							+ "\r\n"
+							+ "'직통(ZICTONG)'에 신청하신 회원가입이 승인되었음을 알려드리며, 일익 번창하심을 진심으로 기원합니다.\r\n"
+							+ "\r\n"
+							+ "- 서비스 이용과 관련하여 궁금하신 내용이 있는 경우 '마이페이지-문의하기' 또는 이메일(#########)로 연락하여 주시기 바랍니다.\r\n"
+							+ "감사합니다.";
+					
+					//알리고 api 알림톡 String tpl_code,String receiver_1,String subject_1,String message_1)
+					CacaoTok.transmit("TO_3417",list.get("ADMIN_HP").toString(), "회원가입승인", alarmMsg ,"회원가입 승인 안내");		
+					
+				}
+		}
+
+		
+		mv.addObject("result", result);
+		mv.setViewName("jsonView");
+		return mv;
+	}
+
+
+  ===================================== Spring bean 설정 xml ===========================================================
+
+<!-- mailSender -->
+	<beans:bean id="mailSender" class="org.springframework.mail.javamail.JavaMailSenderImpl">
+	    <beans:property name="host" value="smtp.gmail.com"/>
+	    <beans:property name="port" value="####"/>        
+	    <beans:property name="username" value="###############"/>
+	    <beans:property name="password" value="#################"/>
+	    <beans:property name="javaMailProperties">
+	        <beans:props>
+	            <beans:prop key="mail.smtp.starttls.enable">true</beans:prop>
+	            <beans:prop key="mail.smtp.auth">true</beans:prop>
+	            <beans:prop key="mail.smtp.ssl.trust">smtp.gmail.com</beans:prop>
+	        </beans:props>
+	    </beans:property>        
+	</beans:bean>
+            
+            
