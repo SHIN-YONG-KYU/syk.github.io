@@ -1,0 +1,190 @@
+// 구매신청 진행
+	function purchaseFix(){
+		
+		//장바구니 상품 체크
+		var check_cnt = $(".prod_buy:checked").length;
+		/* console.log("체크cnt:"+check_cnt); */
+		
+		if(check_cnt == 0){
+			m_alert("상품을 선택해주세요.");
+			return;
+		}
+		
+		//배송지 체크
+		var c_addr_uuid = $("#c_addr_uuid").val();
+		
+		if(c_addr_uuid == "" || c_addr_uuid == null){
+			m_alert("배송지를 선택해주세요.");
+			return;
+		}
+		
+		//도서지역 배송지 체크
+		if(region_status == "e"){
+			m_alert("도서지역은 배송이 불가한지역입니다. 배송지역을 변경해 주세요.");
+			return;
+		}
+		
+		
+		//결제수단 신용카드,가상계좌
+		var p_method = $('#p_method').val();
+		
+		
+		var params={
+				"ADMIN_UUID" : ${sesAdminInfo.ADMIN_UUID}
+				,"ADMIN_ID"  : '${sesAdminInfo.ADMIN_ID}'
+				,"ADMIN_NAME"  : '${sesAdminInfo.ADMIN_NAME}'
+				,"ADDR_UUID" : c_addr_uuid
+				,"CART_STATUS" : 'y'
+				,"TOTAL_DELIVERY_PAY" : $('#total_all_delivery_pay').val()
+				,"P_METHOD" : p_method
+		};
+		
+		//배송메시지 있으면 파라미터에 추가
+		var delivery_msg = $('#delivery_msg').val();
+		if(delivery_msg){
+			params.DELIVERY_MSG = delivery_msg;
+		}
+		
+		
+		//가상계좌입금자명 가상계좌결제시
+		var vacnt_name = $('#vacnt_name').val();
+		if(p_method == 'card'){
+			params.PURCHASE_STATUS = 'dec'; //결제상태
+		}else if(p_method == 'vacnt'){
+			params.PURCHASE_STATUS ='cop'; //결제상태
+			params.DEPOSITORCLNM =vacnt_name; //입금자명
+			if(!vacnt_name){
+				m_alert("입금자명을 입력해주세요.");
+				return;
+			}
+		}
+		
+		
+		//체크된 항목 리스트화
+		list = new Array();
+		
+		//클래스가 prod_buy인 항목 중 체크된 것만 가져옴
+		$('.prod_buy:checked').each(function (index) {
+			var data = new Object();
+			var prod_uuid = Number($(this).val()); //제품 uuid
+			var seller_uuid = $('#search_seller_'+prod_uuid).val(); //seller_uuid
+			
+			
+			data.prod_uuid = prod_uuid;
+			
+			//제품배송비 (일반 +추가 합산)
+			data.delivery_pay = $('#apply_total_d_pay_'+seller_uuid).val()*1; 
+			
+			//적용되는 무료배송 기준금액과 상태
+			data.d_free_status = $('#d_free_status_'+seller_uuid).val(); //무료배송상태
+			data.delivery_free= $('#apply_delivery_free_'+seller_uuid).val()*1; //무료배송 기준금액
+			
+			
+			/* console.log("Ajax돌기전 제품별 배송비 :"+$('#apply_total_d_pay_'+seller_uuid).val()*1); */
+			
+			list1 = new Array();
+			//클래스가 op_uuid 인것들을 가져옴
+			$('.option_'+prod_uuid).each(function (index) {
+				var data1 = new Object();
+				var op_uuid = Number($(this).val()); //옵션의 uuid
+				
+				data1.option_uuid = op_uuid;
+				data1.option_cnt = $('#option_cnt_'+op_uuid).val();
+				data1.option_price = $('#option_price_'+op_uuid).val();
+				data1.option_name = $('#option_name_'+op_uuid).val();
+				console.log("옵션uudi:"+op_uuid);
+				
+				list1.push(data1);
+			});
+			
+			data.list1 = list1;
+			
+			list.push(data);
+		});
+		
+		console.log(list);
+		var jsonData = JSON.stringify(list);
+		params.CART = jsonData;
+		
+		
+		//상품 전체 결제가격
+		var total_payment = $('#total_all_payment').val()*1;
+		params.TOTAL_PAYMENT = total_payment;
+		
+		//컨펌대신뛰우는 창
+		m_confirm("구매를 진행하시겠습니까?");
+		$("#m_confirm").on('click',function(){
+			
+			/* console.log("클릭성공!!!"); */
+		
+			$.ajax({
+				url : '#####################',
+				type : 'post',
+				dataType : 'json',
+				data : params,
+				success : function(data) {
+					var msg = data.json.msg;
+					var result = data.json.result;
+					var order_no = data.order_no;
+					
+					$('#c_order_no').val(order_no);
+					
+					//내부검증 false인항목만 m_alert(msg)
+					if(result == true){
+						var info = data.pgData;
+						$('#mid').val(info.mid);
+						$('#rUrl').val(info.rUrl);
+						$('#payType').val(info.payType);
+						$('#payGroup').val(info.payGroup);
+						$('#payBrand').val(info.payBrand);
+						$('#buyItemnm').val(info.buyItemnm);
+						$('#buyReqamt').val(info.buyReqamt);
+						$('#orderno').val(info.orderno);
+						$('#orderdt').val(info.orderdt);
+						$('#ordertm').val(info.ordertm);
+						$('#checkHash').val(info.checkHash);
+						
+						$('#nfreeAmt').val(info.nfreeAmt);
+						$('#freeAmt').val(info.freeAmt);
+						$('#taxAmt').val(info.taxAmt);
+						
+						$('#reserved01').val(info.reserved01); //결제정보가 담긴 데이터
+						
+						//결제수단이 신용카드인경우에만
+						if(p_method == "card"){
+							
+						}else if(p_method == "vacnt"){
+							$('#depositorClNm').val(vacnt_name);
+						}
+						
+						if(Mobile()){
+							goMobile(); //모바일 페이 호출
+						}else{
+							goPc(); //웹 페이호출
+						}
+						
+						m_alert("결제가 진행중입니다.");
+						$('#m_alert').on('click',function(){
+							setTimeout(function(){
+								window.location.reload(true); //페이호출후 페이지 리로딩
+							}, 1000);
+						});
+						
+						
+					}else{
+						m_alert(msg);
+						$("#m_alert").on('click',function(){
+							window.location.reload(true);
+						})
+					}
+					
+				},
+				error : function(request) {
+					m_alert('구매신청 중 오류가 발생했습니다.');
+					$("#m_alert").on('click',function(){
+						window.location.reload(true);
+					})
+				}
+			});
+		})
+	}
